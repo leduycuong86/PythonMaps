@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>CMPUT 297 - Python Mapping Service - MAP</title>
+	<meta name="viewport" content="initial-scale=1.0, user-scalable=no" />
+	<style type="text/css">
+	html { height: 100% }
+	body { height: 100%; margin: 0; padding: 0 }
+	#map_canvas { height: 100% }
+	#header {
+		position: absolute;
+		z-index: 10;
+		left:0;
+        right:0;
+        top: 20px;
+        margin-left: auto;
+        margin-right: auto;
+        width: 500px;
+		text-align: center;
+	}
+	</style>
+	<link href="/static/css/bootstrap.css" rel="stylesheet">
+	<script type="text/javascript" src="https://maps.googleapis.com/maps/api/js?key={{ GOOGLE_MAPS_API_KEY }}&sensor=false">
+	</script>
+	<script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+	<script type="text/javascript">
+	var map;
+	var markersArray = [];
+
+	var start_pos;
+	var end_pos;
+
+	function initialize() {
+		var edmontonmap = new google.maps.LatLng(53.539083, -113.490143);
+		var mapOptions = {
+			zoom: 15,
+			center: edmontonmap,
+			mapTypeId: google.maps.MapTypeId.ROADMAP
+		};
+		map =  new google.maps.Map(document.getElementById("map_canvas"), mapOptions);
+		var bounds = new google.maps.LatLngBounds();
+
+		// google.maps.event.addListener(map, 'click', function(event) {
+		// 	addMarker(event.latLng);
+		// });
+
+		var obj = jQuery.parseJSON('{{json_data|safe}}');
+
+		if(obj.none)
+		{
+			return;
+		}
+
+		var image = {
+		    url: '/static/img/dot.png',
+		    // This marker is 20 pixels wide by 32 pixels tall.
+		    size: new google.maps.Size(7, 7),
+		    // The origin for this image is 0,0.
+		    origin: new google.maps.Point(0,0),
+		    // The anchor for this image is the base of the flagpole at 0,32.
+		    anchor: new google.maps.Point(4.5,4.5)
+		  };
+
+		start_pos = new google.maps.LatLng(obj[0][0], obj[0][1]);
+		var start = new google.maps.Marker({
+				position: start_pos,
+				map: map
+		});
+		bounds.extend(start.getPosition());
+
+		end_pos = new google.maps.LatLng(obj[obj.length - 1][0], obj[obj.length - 1][1]);
+		var end = new google.maps.Marker({
+				position: end_pos,
+				map: map
+		});
+		bounds.extend(end.getPosition());
+
+		for(var i = 1; i < obj.length - 1; i++)
+		{
+			var marker = new google.maps.Marker({
+				position: new google.maps.LatLng(obj[i][0], obj[i][1]),
+				map: map,
+				icon: image
+			});
+			bounds.extend(marker.getPosition());
+		}
+
+		var flightPlanCoordinates = [];
+
+		for(var i = 0; i < obj.length; i++)
+		{
+			flightPlanCoordinates.push(new google.maps.LatLng(obj[i][0], obj[i][1]));
+		}
+
+		var flightPath = new google.maps.Polyline({
+			path: flightPlanCoordinates,
+			strokeColor: "#FF0000",
+			strokeOpacity: 1.0,
+			strokeWeight: 2
+		});
+
+		flightPath.setMap(map);
+
+		map.fitBounds(bounds);
+
+		// alert('');
+
+	}
+
+	function addMarker(location) {
+		marker = new google.maps.Marker({
+			position: new google.maps.LatLng(location[0], location[1]),
+			map: map
+		});
+		markersArray.push(marker);
+	}
+
+	// Removes the overlays from the map, but keeps them in the array
+	function clearOverlays() {
+		if (markersArray) {
+			for (i in markersArray) {
+				markersArray[i].setMap(null);
+			}
+		}
+	}
+
+	// Shows any overlays currently in the array
+	function showOverlays() {
+		if (markersArray) {
+			for (i in markersArray) {
+				markersArray[i].setMap(map);
+			}
+		}
+	}
+
+	var directions_applied = false;
+
+	// Code sourced from https://marx-tseng.appspot.com/maps/Polyline_from_directions.html
+	function google_directions() {
+		var polyline = new google.maps.Polyline({
+			path: [],
+			strokeColor: '#0000FF',
+			strokeWeight: 5
+		});
+		
+		var bounds = new google.maps.LatLngBounds();
+		var directionsService = new google.maps.DirectionsService(); 
+		var request = { 
+			origin: start_pos, 
+			destination: end_pos, 
+			travelMode: google.maps.DirectionsTravelMode.DRIVING 
+		};
+		
+		directionsService.route(request, function(result, status) { 
+			if (status == google.maps.DirectionsStatus.OK) {
+				path = result.routes[0].overview_path;
+				
+				$(path).each(function(index, item) {
+					polyline.getPath().push(item);
+					bounds.extend(item);
+				})
+
+				polyline.setMap(map);
+				map.fitBounds(bounds);
+				directions_applied = true;
+			}
+		});		
+	}
+
+	$(document).ready(function() {
+		initialize();
+
+		$("#google_route").bind("click", function(event) {
+			event.preventDefault();
+
+			if(directions_applied == false)
+			{
+				google_directions();
+				$("#google_route").addClass("disabled");
+			}
+		});
+
+	});
+	</script>
+
+	<!-- Fav and touch icons -->
+    <link rel="shortcut icon" href="/static/img/favicon.png">
+</head>
+<body>
+	<div id="header">
+		<a href="/" class="btn btn-large btn-info">Go Back <i class="icon-step-backward icon-white"></i></a> <a href="#" class="btn btn-large btn-danger" id="google_route">Google Route <i class="icon-adjust icon-white"></i></a>
+	</div>
+	<div id="map_canvas" style="width:100%; height:100%"></div>
+</body>
+</html>
